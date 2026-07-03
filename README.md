@@ -7,6 +7,7 @@ An automated, same-chat Playwright browser controller designed to transform raw 
 ## Key Features
 
 * 🚀 **Same-Chat Session Continuity:** Iterates sequentially through the queue without refreshing the browser tab, maintaining prompt memory context and boosting execution speed.
+* 📝 **Dynamic Custom Prompts (`prompts.txt`):** Auto-generates a simple text file (`prompts.txt`) on startup. You can easily copy-paste, add, or change your prompts by separating them with a simple `---` line. The bot shuffles and rotates them automatically.
 * 📐 **EXIF Auto-Orientation:** Automatically transposes sideways/landscape photos upright (straight) based on their EXIF tags.
 * 🖼️ **HEIC/HEIF Support:** Automatically converts Apple HEIC files to standard high-quality JPEGs on the fly for absolute browser and upload compatibility.
 * 🔐 **MD5 Content Hashing (Zero-Duplicate Sync):** Uses MD5 content fingerprinting to track processed files. Skips duplicate content even if files are renamed. If you overwrite/recopy a file to correct it, the bot deletes the old output and triggers a fresh generation.
@@ -16,12 +17,30 @@ An automated, same-chat Playwright browser controller designed to transform raw 
 
 ---
 
+## Machine & Network Resilience Guidelines
+
+The bot is designed to run reliably on any desktop machine and adapt dynamically to fast, slow, or unstable internet networks:
+
+### 1. Machine & OS Compatibility (Any PC)
+* **Cross-Platform:** Runs seamlessly on **Windows, macOS (including Apple Silicon M1/M2/M3), and Linux**.
+* **Smart Paths:** Path references automatically adapt to use Windows backslashes (`\`) or Unix/Mac forward slashes (`/`).
+* **Independent Browser:** Playwright manages its own Chromium binaries, isolated from changes to your system's default Chrome application.
+
+### 2. Network & Internet Resilience
+* **Upload Progress Tracker:** The bot pauses submission until all background progress indicators (`mat-progress-bar`, `.progress-bar`) disappear.
+* **Failsafe Send Verification:** Confirms that the input box successfully clears after sending. If a packet drops or a click misses, it retries with physical `Enter` keys up to 3 times.
+* **Resilient Navigation (`safe_goto`):** Includes a built-in navigation loop that retries up to 3 times with exponential delays if a page fails to load.
+* **3-Failure Safety Abort:** If your internet disconnects completely, the bot shuts down cleanly after 3 consecutive failures to preserve your unprocessed image queue for later resumption.
+
+---
+
 ## Folder Structure
 
 ```text
 gemini-image-generator-bot/
 ├── run_bot.py                 # Core controller, Playwright loop, and file engine
-├── config.json                # Local paths, configurations, and prompt templates
+├── config.json                # Local paths, configurations, and browser options
+├── prompts.txt                # Easy text file to copy-paste your prompts (separated by ---)
 ├── .gitignore                 # GitHub ignore config (safeguards private images/paths)
 ├── README.md                  # This file
 └── project_recreation/
