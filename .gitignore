@@ -1,0 +1,31 @@
+# Python bytecode and caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+ENV/
+env/
+
+# Project folders containing private images
+input_images/
+output_images/
+
+# Local databases and hashes (private filenames & content)
+processed_metadata.json
+
+# Local configurations (contains local windows paths, username, and active sessions)
+config.json
+
+# Chrome profile data / Temp data (if saved locally)
+chrome_profile/
+*.tmp
+*.log
+
+# OS-specific files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
