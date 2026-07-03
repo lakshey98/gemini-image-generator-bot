@@ -916,12 +916,42 @@ def main():
     successful_since_new_chat = 0
     delay = config.get("delay_between_generations_sec", 10)
     
+    # Check/Generate prompts.txt file in the script directory
+    prompts_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prompts.txt')
+    
+    # If prompts.txt does not exist, create it with the default premium prompts
+    if not os.path.exists(prompts_file_path):
+        try:
+            print("[i] Creating default 'prompts.txt' file with premium templates...")
+            with open(prompts_file_path, 'w', encoding='utf-8') as f:
+                # Separate prompts by '---' on a newline
+                f.write("\n---\n".join(PREMIUM_PROMPTS))
+            print("[+] 'prompts.txt' created successfully. You can edit this file to add or change prompts!")
+        except Exception as e:
+            print(f"Warning: Failed to create prompts.txt: {e}")
+            
+    # Load prompts from prompts.txt
+    active_prompts_pool = PREMIUM_PROMPTS
+    if os.path.exists(prompts_file_path):
+        try:
+            with open(prompts_file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            # Split prompts by a line containing '---'
+            raw_prompts = [p.strip() for p in re.split(r'\n\s*---\s*\n|\n\s*---\s*$', content) if p.strip()]
+            if raw_prompts:
+                active_prompts_pool = raw_prompts
+                print(f"[+] Loaded {len(active_prompts_pool)} custom prompts from 'prompts.txt'.")
+            else:
+                print("[i] 'prompts.txt' is empty. Using default premium prompts.")
+        except Exception as e:
+            print(f"Warning: Failed to read prompts.txt ({e}). Using default premium prompts.")
+            
     # Set up prompt shuffling pool if enabled
     use_shuffled = config.get("use_shuffled_prompts", True)
     if use_shuffled:
-        prompts_pool = list(config.get("prompts_pool", PREMIUM_PROMPTS))
+        prompts_pool = list(active_prompts_pool)
         random.shuffle(prompts_pool)
-        print(f"[i] Shuffled prompt pool initialized with {len(prompts_pool)} premium templates.")
+        print(f"[i] Shuffled prompt pool initialized with {len(prompts_pool)} templates.")
     else:
         print("[i] Shuffling is disabled. Using custom static prompt from config.")
         
