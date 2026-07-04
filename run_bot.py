@@ -64,7 +64,7 @@ PREMIUM_PROMPTS = [
     "Overhead flat lay photography of a [dress description] on champagne gold satin silk. Features: heavy zardozi, mirror-work, and sequin elements. Lighting: Dynamic studio setup designed to maximize specular reflections on mirrors and metallic threads. Background props: baby's breath and a dark patina brass bowl. Sharp focus, maximum clarity. At the bottom center of the image, below the dress, render the text 'Shiv Kripa' in a clean, elegant, luxury serif branding font (delicate and small, approximately 8% to 10% of the image width) with a thin horizontal separator line and a small floral/diamond motif accent in the middle, matching the color theme of the dress. 8k, photorealistic. --ar 1:1"
 ]
 
-IMAGE_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.heic')
+IMAGE_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.heic', '.heif')
 
 def get_dress_description(filename):
     """Helper to extract a descriptive name from the image filename.
@@ -95,6 +95,7 @@ def load_config():
         except Exception as e:
             print(f"Warning: Failed to load config.json ({e}). Using defaults.")
     return DEFAULT_CONFIG
+from telegram_status import BotState, send_notification, check_telegram_status_requests
 
 # ------------------------------------------------------------------------------
 # DRIVE & FILE HANDLER
@@ -245,6 +246,7 @@ class DriveHandler:
     def save_outputs(self, input_filename, temp_image_paths):
         """Saves generated images, copies original file timestamps, and updates file hash metadata."""
         base_name, _ = os.path.splitext(input_filename)
+        saved_paths = []
         
         for i, temp_path in enumerate(temp_image_paths):
             ext = os.path.splitext(temp_path)[1]
@@ -252,6 +254,7 @@ class DriveHandler:
             dest_path = os.path.join(self.destination_folder, dest_filename)
             shutil.copy(temp_path, dest_path)
             print(f"[+] Saved generated image: {dest_path}")
+            saved_paths.append(dest_path)
             
             # Preserve original timestamp (clicked date)
             try:
@@ -273,6 +276,8 @@ class DriveHandler:
                 self.save_metadata()
         except Exception as e:
             print(f"Warning: Failed to save file hash metadata: {e}")
+            
+        return saved_paths
 
 # ------------------------------------------------------------------------------
 # GEMINI PLAYWRIGHT AUTOMATION
@@ -899,6 +904,16 @@ def main():
         
     print(f"[i] Total images to process: {len(unprocessed_images)}")
     
+    # Send start notification
+    if config.get("notifications", {}).get("push_alerts", False):
+        send_notification(
+            config,
+            f"🚀 **Gemini Product Photography Bot Started!**\n"
+            f"• Total images in folder: {len(all_images)}\n"
+            f"• Already processed (skipped): {len(all_images) - len(unprocessed_images)}\n"
+            f"• Queue to process: {len(unprocessed_images)} image(s)."
+        )
+    
     # 3. Start Browser Automation
     bot = GeminiAutomation(config)
     try:
@@ -910,6 +925,11 @@ def main():
         sys.exit(1)
         
     # 4. Iterate over images
+    bot_state = BotState()
+    bot_state.status = "Running"
+    bot_state.total_images = len(unprocessed_images)
+    bot_state.run_start_time = time.time()
+    
     successful_count = 0
     failed_count = 0
     consecutive_failures = 0
@@ -957,6 +977,11 @@ def main():
         
     try:
         for idx, img in enumerate(unprocessed_images):
+            # Update live state info
+            bot_state.current_idx = idx + 1
+            bot_state.current_image_name = img['name']
+            check_telegram_status_requests(config, bot_state)
+            
             print("\n" + "="*50)
             print(f" PROCESSING IMAGE {idx + 1} OF {len(unprocessed_images)}: '{img['name']}'")
             print("="*50)
@@ -989,9 +1014,22 @@ def main():
                 temp_paths = bot.run_generation(img['path'], active_prompt)
                 
                 if temp_paths:
-                    drive.save_outputs(img['name'], temp_paths)
+                    saved_paths = drive.save_outputs(img['name'], temp_paths)
                     successful_count += 1
+                    bot_state.successful_count = successful_count
                     consecutive_failures = 0  # Reset counter on successful generation
+                    
+                    # Send Discord/Telegram notification if push alerts are enabled
+                    if config.get("notifications", {}).get("push_alerts", False):
+                        first_img = saved_paths[0] if saved_paths else None
+                        send_notification(
+                            config,
+                            f"✅ **Generation Successful!**\n"
+                            f"• Image: `{img['name']}`\n"
+                            f"• Generated: {len(temp_paths)} styled version(s)\n"
+                            f"• Progress: {successful_count}/{len(unprocessed_images)} in this run",
+                            image_path=first_img
+                        )
                     successful_since_new_chat += 1
                     
                     # Auto-New Chat every 15 successful images to clear memory and save compute quota
@@ -1002,6 +1040,7 @@ def main():
                 else:
                     print(f"\n[!!! ERROR !!!] Failed: Gemini returned no images for '{img['name']}'")
                     failed_count += 1
+                    bot_state.failed_count = failed_count
                     consecutive_failures += 1
                     
                 # Clean up local temp files
@@ -1014,26 +1053,41 @@ def main():
                 err_str = str(e)
                 print(f"\n[!!! ERROR !!!] Unexpected exception while processing '{img['name']}': {e}")
                 failed_count += 1
+                bot_state.failed_count = failed_count
                 consecutive_failures += 1
                 if "GEMINI_RATE_LIMIT_REACHED" in err_str:
-                    print("\n[!!! RATE LIMIT REACHED !!!] Gemini is currently rate-limiting image generation. Aborting execution to prevent consecutive failures. Please try again in 1-2 hours.")
+                    msg = "🛑 **Rate Limit Abort!** Gemini is currently rate-limiting image generation. Stopping run."
+                    print(f"\n[!!! RATE LIMIT REACHED !!!] {msg}")
+                    send_notification(config, msg)
                     break
                     
             if consecutive_failures >= 3:
-                print("\n[!!! CONSECUTIVE FAILURES ABRUPT STOP !!!] 3 images in a row failed to process. Gemini may be rate-limited, overloaded, or experiencing connection issues. Stopping execution to prevent errors.")
+                msg = "🛑 **Abrupt Stop!** 3 images in a row failed to process. Check internet/session."
+                print(f"\n[!!! CONSECUTIVE FAILURES ABRUPT STOP !!!] {msg}")
+                send_notification(config, msg)
                 break
                 
-            # Inter-image delay
+            # Inter-image delay with live Telegram progress checking
             if idx < len(unprocessed_images) - 1:
                 print(f"[i] Waiting {delay} seconds before starting the next image...")
-                time.sleep(delay)
+                start_time = time.time()
+                while time.time() - start_time < delay:
+                    check_telegram_status_requests(config, bot_state)
+                    time.sleep(1)
                 
     except KeyboardInterrupt:
         print("\n[i] Process interrupted by user. Safely shutting down...")
     finally:
         bot.close()
+        bot_state.status = "Idle"
         
     # 5. Output Summary
+    summary_msg = (
+        f"🏁 **Batch Run Complete!**\n"
+        f"• Total processed: {successful_count + failed_count}\n"
+        f"• Successful: {successful_count}\n"
+        f"• Failed: {failed_count}"
+    )
     print("\n" + "="*60)
     print("                     RUN SUMMARY")
     print("="*60)
@@ -1042,6 +1096,9 @@ def main():
     print(f"Failed:           {failed_count}")
     print("="*60)
     print("Finished.")
+    
+    if config.get("notifications", {}).get("push_alerts", False):
+        send_notification(config, summary_msg)
 
 if __name__ == "__main__":
     # Force stdout/stderr flushing for real-time tracking in CMD

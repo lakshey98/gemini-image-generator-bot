@@ -7,6 +7,7 @@ An automated, same-chat Playwright browser controller designed to transform raw 
 ## Key Features
 
 * 🚀 **Same-Chat Session Continuity:** Iterates sequentially through the queue without refreshing the browser tab, maintaining prompt memory context and boosting execution speed.
+* 📱 **Mobile Status Notifications (Discord / Telegram):** Sends real-time status alerts (Start, Success, Rate Limits, and Run Summary) directly to your phone. It even **attaches the generated photo** to the notification!
 * 📝 **Dynamic Custom Prompts (`prompts.txt`):** Auto-generates a simple text file (`prompts.txt`) on startup. You can easily copy-paste, add, or change your prompts by separating them with a simple `---` line. The bot shuffles and rotates them automatically.
 * 📐 **EXIF Auto-Orientation:** Automatically transposes sideways/landscape photos upright (straight) based on their EXIF tags.
 * 🖼️ **HEIC/HEIF Support:** Automatically converts Apple HEIC files to standard high-quality JPEGs on the fly for absolute browser and upload compatibility.
@@ -31,6 +32,40 @@ The bot is designed to run reliably on any desktop machine and adapt dynamically
 * **Failsafe Send Verification:** Confirms that the input box successfully clears after sending. If a packet drops or a click misses, it retries with physical `Enter` keys up to 3 times.
 * **Resilient Navigation (`safe_goto`):** Includes a built-in navigation loop that retries up to 3 times with exponential delays if a page fails to load.
 * **3-Failure Safety Abort:** If your internet disconnects completely, the bot shuts down cleanly after 3 consecutive failures to preserve your unprocessed image queue for later resumption.
+
+---
+
+## Real-Time Mobile Notifications Setup
+
+To receive updates on your phone while the bot runs in the background, open your `config.json` and customize the `notifications` block:
+
+### A. Discord Webhooks (Easiest & Recommended)
+1. Open Discord, go to your server settings, click **Integrations** -> **Webhooks**, and click **Create Webhook**.
+2. Copy the Webhook URL.
+3. Configure `config.json` like this:
+   ```json
+   "notifications": {
+     "enabled": true,
+     "platform": "discord",
+     "webhook_url": "https://discord.com/api/webhooks/...",
+     "telegram_token": "",
+     "telegram_chat_id": ""
+   }
+   ```
+
+### B. Telegram Bots
+1. Message **@BotFather** on Telegram and create a new bot to receive your API token.
+2. Message **@userinfobot** to find your Telegram account's numeric Chat ID.
+3. Configure `config.json` like this:
+   ```json
+   "notifications": {
+     "enabled": true,
+     "platform": "telegram",
+     "webhook_url": "",
+     "telegram_token": "123456789:ABCdefGhI...",
+     "telegram_chat_id": "987654321"
+   }
+   ```
 
 ---
 
